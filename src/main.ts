@@ -137,7 +137,7 @@ const footL=new THREE.Mesh(new THREE.BoxGeometry(.22,.12,.38),shoes), footR=foot
 footL.position.set(-.17,.12,-.06); footR.position.set(.17,.12,-.06); player.add(footL,footR);
 player.position.set(0,0,0); scene.add(player);
 
-const state={playing:false,firstPerson:false,yaw:0,pitch:-.12,vertical:0,onGround:true,walkTime:0,moveX:0,moveZ:0,lookX:0,lookY:0};
+const state={playing:false,firstPerson:false,yaw:0,pitch:-.12,vertical:0,onGround:true,walkTime:0,moveX:0,moveZ:0,lookX:0,lookY:0,gamepadCameraPressed:false};
 const keys=new Set<string>();
 const clock=new THREE.Clock();
 const moveForward=new THREE.Vector3(), moveRight=new THREE.Vector3(), desired=new THREE.Vector3();
@@ -207,6 +207,19 @@ function blocked(x:number,z:number) {
 }
 function updatePlayer(dt:number) {
   let x=state.moveX,z=state.moveZ;
+  const gamepad=navigator.getGamepads?.().find(p=>p?.connected);
+  if(gamepad) {
+    x+=Math.abs(gamepad.axes[0]??0)>.14?gamepad.axes[0]:0;
+    z+=Math.abs(gamepad.axes[1]??0)>.14?gamepad.axes[1]:0;
+    state.yaw-=(Math.abs(gamepad.axes[2]??0)>.14?gamepad.axes[2]:0)*2.4*dt;
+    state.pitch=Math.max(-.95,Math.min(.45,state.pitch-(Math.abs(gamepad.axes[3]??0)>.14?gamepad.axes[3]:0)*2.0*dt));
+    const cameraPressed=Boolean(gamepad.buttons[3]?.pressed);
+    if(cameraPressed&&!state.gamepadCameraPressed)toggleCamera();
+    state.gamepadCameraPressed=cameraPressed;
+    if(gamepad.buttons[0]?.pressed&&state.onGround){state.vertical=7.2;state.onGround=false;}
+  } else {
+    state.gamepadCameraPressed=false;
+  }
   if(keys.has('KeyW')||keys.has('ArrowUp'))z-=1;
   if(keys.has('KeyS')||keys.has('ArrowDown'))z+=1;
   if(keys.has('KeyA')||keys.has('ArrowLeft'))x-=1;
