@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { supabaseConfigured } from './supabase';
 
-const VERSION = '0.2.2';
+const VERSION = '0.3.0';
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
 const menu = document.querySelector<HTMLElement>('#menu')!;
 const hud = document.querySelector<HTMLElement>('#hud')!;
@@ -185,17 +185,46 @@ function capsulePart(radius:number,length:number,mat:THREE.Material,x:number,y:n
 }
 const torso=capsulePart(.34,.55,jacket,0,1.28,0);
 const head=new THREE.Mesh(new THREE.SphereGeometry(.23,16,12),skin); head.position.y=2.02; head.castShadow=!isTouch; player.add(head);
-const legL=capsulePart(.13,.5,pants,-.17,.55,0), legR=capsulePart(.13,.5,pants,.17,.55,0);
-const armL=capsulePart(.105,.48,jacket,-.43,1.32,0), armR=capsulePart(.105,.48,jacket,.43,1.32,0);
+function limbPivot(x:number,y:number,mat:THREE.Material,radius:number,length:number) {
+  const pivot=new THREE.Group(); pivot.position.set(x,y,0); player.add(pivot);
+  const limb=new THREE.Mesh(new THREE.CapsuleGeometry(radius,length,4,8),mat);
+  limb.position.y=-length/2-radius*.65; limb.castShadow=!isTouch; pivot.add(limb);
+  return pivot;
+}
+const legL=limbPivot(-.17,.88,pants,.13,.48), legR=limbPivot(.17,.88,pants,.13,.48);
+const armL=limbPivot(-.43,1.55,jacket,.105,.43), armR=limbPivot(.43,1.55,jacket,.105,.43);
 const footL=new THREE.Mesh(new THREE.BoxGeometry(.22,.12,.38),shoes), footR=footL.clone();
 footL.position.set(-.17,.12,-.06); footR.position.set(.17,.12,-.06); player.add(footL,footR);
 player.position.set(0,0,0); scene.add(player);
 
-const state={playing:false,firstPerson:false,yaw:0,pitch:-.12,vertical:0,onGround:true,walkTime:0,moveX:0,moveZ:0,lookX:0,lookY:0,gamepadCameraPressed:false};
+const state={playing:false,firstPerson:false,yaw:0,pitch:-.12,vertical:0,onGround:true,walkTime:0,moveX:0,moveZ:0,lookX:0,lookY:0,gamepadCameraPressed:false,inVehicle:false,interactHint:false};
 const keys=new Set<string>();
 const clock=new THREE.Clock();
 const moveForward=new THREE.Vector3(), moveRight=new THREE.Vector3(), desired=new THREE.Vector3();
 const cameraTarget=new THREE.Vector3();
+const vehicle=new THREE.Group();
+const carPaint=new THREE.MeshStandardMaterial({color:0x344a5c,metalness:.62,roughness:.3});
+const glass=new THREE.MeshStandardMaterial({color:0x182c39,metalness:.35,roughness:.18});
+const rubber=new THREE.MeshStandardMaterial({color:0x151719,roughness:.95});
+const chrome=new THREE.MeshStandardMaterial({color:0xaab6bd,metalness:.8,roughness:.22});
+function carBox(w:number,h:number,d:number,mat:THREE.Material,x:number,y:number,z:number){
+ const part=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);part.position.set(x,y,z);vehicle.add(part);return part;
+}
+carBox(2.05,.62,4.15,carPaint,0,.72,0);
+carBox(1.72,.72,2.05,glass,0,1.35,-.12);
+carBox(1.9,.12,1.1,carPaint,0,1.78,-.1);
+for(const x of [-.96,.96]) for(const z of [-1.35,1.35]){
+ const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.38,.38,.22,16),rubber);
+ wheel.rotation.z=Math.PI/2;wheel.position.set(x,.42,z);vehicle.add(wheel);
+ const hub=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.23,12),chrome);
+ hub.rotation.z=Math.PI/2;hub.position.set(x,.42,z);vehicle.add(hub);
+}
+for(const x of [-.68,.68]){
+ carBox(.38,.2,.08,chrome,x,.78,-2.1);
+ carBox(.38,.18,.08,new THREE.MeshStandardMaterial({color:0x9b2924,emissive:0x3d0805}),x,.78,2.1);
+}
+vehicle.position.set(3.6,0,0);scene.add(vehicle);
+let lastInteractHint=false;
 let lastToast=0;
 
 function showToast(message:string) {
@@ -203,6 +232,24 @@ function showToast(message:string) {
   window.clearTimeout(lastToast);
   lastToast=window.setTimeout(()=>toast.classList.add('hidden'),2200);
 }
+function interact() {
+ if(!state.playing)return;
+ if(state.inVehicle){
+  state.inVehicle=false;player.visible=true;
+  player.position.set(vehicle.position.x+2.2,0,vehicle.position.z);
+  player.rotation.y=vehicle.rotation.y;
+  showToast('Du bist ausgestiegen.');
+  return;
+ }
+ const distance=player.position.distanceTo(vehicle.position);
+ if(distance<4.2){
+  state.inVehicle=true;player.visible=false;state.yaw=vehicle.rotation.y;
+  showToast('Fahrzeug betreten. E zum Aussteigen.');
+ } else {
+  showToast('Nichts in Reichweite. Geh näher an das Fahrzeug.');
+ }
+}
+document.querySelector('#interact')?.addEventListener('click',interact);
 function startGame() {
   state.playing=true; menu.classList.add('hidden'); hud.classList.remove('hidden');
   if(isTouch) touchControls.classList.remove('hidden');
@@ -220,6 +267,7 @@ document.querySelector('#close-controls')?.addEventListener('click',()=>controls
 window.addEventListener('keydown',e=>{
   keys.add(e.code);
   if(e.code==='KeyV'&&state.playing) toggleCamera();
+  if(e.code==='KeyE'&&state.playing&&!e.repeat) interact();
   if(e.code==='Escape'&&document.pointerLockElement===canvas) document.exitPointerLock();
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));
@@ -279,6 +327,16 @@ function updatePlayer(dt:number) {
   if(keys.has('KeyA')||keys.has('ArrowLeft'))x-=1;
   if(keys.has('KeyD')||keys.has('ArrowRight'))x+=1;
   const moving=Math.hypot(x,z)>.08;
+  if(state.inVehicle){
+    const throttle=-z, steering=x;
+    const speed=throttle*13;
+    vehicle.rotation.y-=steering*dt*(Math.abs(speed)>.5?1.45:.7);
+    const forward=new THREE.Vector3(Math.sin(vehicle.rotation.y),0,Math.cos(vehicle.rotation.y));
+    const next=vehicle.position.clone().addScaledVector(forward,speed*dt);
+    if(!blocked(next.x,next.z))vehicle.position.copy(next);
+    state.walkTime+=dt*9;
+    return;
+  }
   if(moving) {
     const len=Math.hypot(x,z);x/=len;z/=len;
     moveForward.set(-Math.sin(state.yaw),0,-Math.cos(state.yaw));
@@ -296,15 +354,20 @@ function updatePlayer(dt:number) {
   state.vertical-=19*dt;
   player.position.y+=state.vertical*dt;
   if(player.position.y<=0){player.position.y=0;state.vertical=0;state.onGround=true;}
-  const swing=moving?Math.sin(state.walkTime)*.48:0;
-  legL.rotation.x=swing;legR.rotation.x=-swing;armL.rotation.x=-swing*.75;armR.rotation.x=swing*.75;
-  torso.position.y=1.28+(moving?Math.abs(Math.sin(state.walkTime*2))*.035:0);
+  const stride=moving?Math.sin(state.walkTime)*.34:0;
+  legL.rotation.x=stride;legR.rotation.x=-stride;
+  armL.rotation.x=-stride*.55;armR.rotation.x=stride*.55;
+  legL.rotation.z=moving?Math.max(0,Math.cos(state.walkTime))*.08:0;
+  legR.rotation.z=moving?Math.max(0,-Math.cos(state.walkTime))*.08:0;
+  torso.position.y=1.28+(moving?Math.abs(Math.sin(state.walkTime*2))*.012:0);
 }
 
 function updateCamera(dt:number) {
-  const forward=new THREE.Vector3(-Math.sin(state.yaw),0,-Math.cos(state.yaw));
+  const target=state.inVehicle?vehicle.position:player.position;
+  const yaw=state.inVehicle?vehicle.rotation.y:state.yaw;
+  const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
   if(state.firstPerson) {
-    cameraTarget.set(player.position.x,player.position.y+1.75,player.position.z);
+    cameraTarget.set(target.x,target.y+(state.inVehicle?1.35:1.75),target.z);
     camera.position.lerp(cameraTarget.clone().add(new THREE.Vector3(0,.04,0)),1-Math.exp(-18*dt));
     const look=new THREE.Vector3(
       camera.position.x+forward.x*Math.cos(state.pitch),
@@ -313,12 +376,12 @@ function updateCamera(dt:number) {
     );
     camera.lookAt(look);
   } else {
-    cameraTarget.set(player.position.x,player.position.y+1.35,player.position.z);
-    const distance=6.8;
+    cameraTarget.set(target.x,target.y+(state.inVehicle?1.1:1.35),target.z);
+    const distance=state.inVehicle?8:6.8;
     const desiredCamera=new THREE.Vector3(
-      player.position.x+Math.sin(state.yaw)*distance,
-      player.position.y+3.0+state.pitch*3,
-      player.position.z+Math.cos(state.yaw)*distance
+      target.x+Math.sin(yaw)*distance,
+      target.y+(state.inVehicle?4.0:3.0)+state.pitch*3,
+      target.z+Math.cos(yaw)*distance
     );
     camera.position.lerp(desiredCamera,1-Math.exp(-7*dt));
     camera.lookAt(cameraTarget);
