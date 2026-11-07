@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { supabaseConfigured } from './supabase';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
 const menu = document.querySelector<HTMLElement>('#menu')!;
 const hud = document.querySelector<HTMLElement>('#hud')!;
@@ -11,36 +11,87 @@ const controlsPanel = document.querySelector<HTMLElement>('#controls-panel');
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x9aaab8);
-scene.fog = new THREE.Fog(0x9aaab8, 75, 260);
+scene.background = new THREE.Color(0xaebdca);
+scene.fog = new THREE.Fog(0xaebdca, 105, 340);
 
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 700);
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouch ? 1.5 : 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', precision: 'highp' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 2 : 2.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = !isTouch;
+renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+renderer.toneMappingExposure = 1.0;
+renderer.setClearColor(0xaebdca);
+renderer.info.autoReset = true;
 
 const hemi = new THREE.HemisphereLight(0xc7d9ea, 0x424b50, 2.1);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffe2bf, 3.1);
 sun.position.set(-65, 100, 45);
-sun.castShadow = !isTouch;
-sun.shadow.mapSize.set(1024, 1024);
+sun.castShadow = true;
+sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
+sun.shadow.bias = -0.00012;
+sun.shadow.normalBias = 0.025;
 sun.shadow.camera.left = -100;
 sun.shadow.camera.right = 100;
 sun.shadow.camera.top = 100;
 sun.shadow.camera.bottom = -100;
 scene.add(sun);
 
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x56605d, roughness: 0.96 });
-const roadMat = new THREE.MeshStandardMaterial({ color: 0x252b30, roughness: 0.95 });
-const lineMat = new THREE.MeshBasicMaterial({ color: 0xb7b8ae });
-const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x858985, roughness: 1 });
-const buildingMats = [0x68737b,0x8a8d89,0x555f68,0x9a9990,0x6d7775,0x4b5964].map(color => new THREE.MeshStandardMaterial({ color, roughness: .82, metalness: .08 }));
+function makeSurfaceTexture(base: string, seed: number, facade = false) {
+  const canvasTexture = document.createElement('canvas');
+  canvasTexture.width = 512;
+  canvasTexture.height = 512;
+  const ctx = canvasTexture.getContext('2d')!;
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 512, 512);
+  let state = seed >>> 0;
+  const random = () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  for (let i = 0; i < 18000; i++) {
+    const shade = Math.floor(random() * 48);
+    ctx.fillStyle = random() > .5 ? `rgba(255,255,255,${shade / 1200})` : `rgba(0,0,0,${shade / 1100})`;
+    const size = facade ? 1.5 : 2.5;
+    ctx.fillRect(random() * 512, random() * 512, size, size);
+  }
+  if (facade) {
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 6; col++) {
+        const x = 22 + col * 82, y = 20 + row * 62;
+        const lit = random() > .58;
+        ctx.fillStyle = '#26343d';
+        ctx.fillRect(x - 3, y - 3, 54, 43);
+        ctx.fillStyle = lit ? (random() > .5 ? '#9bb7c5' : '#d0c8ad') : '#34434b';
+        ctx.fillRect(x, y, 48, 37);
+        ctx.fillStyle = 'rgba(255,255,255,.22)';
+        ctx.fillRect(x + 3, y + 3, 3, 30);
+        ctx.fillStyle = 'rgba(10,18,24,.35)';
+        ctx.fillRect(x + 23, y, 2, 37);
+      }
+    }
+    ctx.fillStyle = 'rgba(15,22,28,.28)';
+    for (let y = 0; y < 512; y += 62) ctx.fillRect(0, y, 512, 5);
+  }
+  const texture = new THREE.CanvasTexture(canvasTexture);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
+  texture.needsUpdate = true;
+  return texture;
+}
+const groundMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: makeSurfaceTexture('#626b62', 11), roughness: 1 });
+const roadMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: makeSurfaceTexture('#292f33', 29), roughness: .98 });
+const lineMat = new THREE.MeshStandardMaterial({ color: 0xc4c2b5, roughness: .8 });
+const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: makeSurfaceTexture('#888b86', 47), roughness: 1 });
+const buildingMats = [0x68737b,0x8a8d89,0x555f68,0x9a9990,0x6d7775,0x4b5964].map((color, index) => new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  map: makeSurfaceTexture('#' + color.toString(16).padStart(6, '0'), 100 + index * 17, true),
+  roughness: .88,
+  metalness: .04,
+}));
 const windowMat = new THREE.MeshStandardMaterial({ color: 0x8eb3c8, emissive: 0x29465a, emissiveIntensity: .45, metalness: .35, roughness: .28 });
 const darkWindowMat = new THREE.MeshStandardMaterial({ color: 0x263944, metalness: .35, roughness: .3 });
 const obstacles: Array<{minX:number;maxX:number;minZ:number;maxZ:number}> = [];
@@ -48,7 +99,7 @@ const obstacles: Array<{minX:number;maxX:number;minZ:number;maxZ:number}> = [];
 function addBox(x:number,y:number,z:number,w:number,h:number,d:number,material:THREE.Material, cast=true, receive=true) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), material);
   mesh.position.set(x,y+h/2,z);
-  mesh.castShadow = cast && !isTouch;
+  mesh.castShadow = cast;
   mesh.receiveShadow = receive;
   scene.add(mesh);
   return mesh;
@@ -288,7 +339,7 @@ animate();
 window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth,window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio,isTouch?1.5:2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,isTouch?2:2.5));
 });
 
 if(!supabaseConfigured) console.info('AFTERSTATE: Supabase credentials are not configured yet. The local prototype still works.');
