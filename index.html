@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#080b10" />
+    <meta name="description" content="AFTERSTATE - Your World. Your Rules. A cinematic open-world browser game." />
+    <title>AFTERSTATE | Your World. Your Rules.</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="world" aria-label="AFTERSTATE 3D game world"></canvas>
+      <section id="menu" class="menu">
+        <div class="menu-shade"></div>
+        <div class="menu-content">
+          <div class="eyebrow">A LIVING OPEN WORLD</div>
+          <h1>AFTER<span>STATE</span></h1>
+          <p class="tagline">YOUR WORLD. YOUR RULES.</p>
+          <div class="menu-actions">
+            <button id="play" class="primary">SPIEL STARTEN <span>↗</span></button>
+            <button id="how-to-play" class="secondary">STEUERUNG</button>
+          </div>
+          <div class="menu-foot"><span>EARLY ACCESS BUILD</span><span>VERSION 0.1.0</span></div>
+        </div>
+        <div id="controls-panel" class="controls-panel hidden">
+          <button id="close-controls" class="close" aria-label="Schließen">×</button>
+          <h2>STEUERUNG</h2>
+          <p><b>W A S D</b> Bewegen <b>SHIFT</b> Rennen</p>
+          <p><b>SPACE</b> Springen <b>V</b> Perspektive wechseln</p>
+          <p><b>MAUS</b> Kamera drehen <b>ESC</b> Maus lösen</p>
+          <p class="muted">Mobil: Linker Joystick zum Bewegen, rechter Bereich zum Umsehen, SPRINGEN zum Springen.</p>
+        </div>
+      </section>
+      <div id="hud" class="hud hidden">
+        <div class="hud-brand">AFTER<span>STATE</span><small>0.1.0 / FIRST WORLD</small></div>
+        <div class="hud-location"><span class="live-dot"></span> METRO CITY <small>WEST DISTRICT</small></div>
+        <div class="hud-help">WASD BEWEGEN <i>·</i> V KAMERA <i>·</i> ESC MAUS</div>
+        <div id="crosshair" class="crosshair hidden">+</div>
+      </div>
+      <div id="touch-controls" class="touch-controls hidden">
+        <div id="move-stick" class="stick"><div class="stick-knob"></div><span>MOVE</span></div>
+        <div id="look-zone" class="look-zone"></div>
+        <button id="jump" class="jump-button">JUMP</button>
+      </div>
+      <div id="toast" class="toast hidden"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
