@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { supabaseConfigured } from './supabase';
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.2';
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
 const menu = document.querySelector<HTMLElement>('#menu')!;
 const hud = document.querySelector<HTMLElement>('#hud')!;
 const touchControls = document.querySelector<HTMLElement>('#touch-controls')!;
 const toast = document.querySelector<HTMLElement>('#toast')!;
+// Register the touch action immediately, before building the large 3D scene.
+document.querySelector('#play')?.addEventListener('click', () => startGame());
 const controlsPanel = document.querySelector<HTMLElement>('#controls-panel');
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
@@ -17,8 +19,8 @@ scene.fog = new THREE.Fog(0xaebdca, 105, 340);
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 700);
 // Mobile Safari has a much tighter GPU budget than desktop browsers.
 // Keep the mobile renderer lightweight so the game can initialize reliably.
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'default' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 1.25 : 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: isTouch ? 'low-power' : 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 1 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = !isTouch;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -54,7 +56,7 @@ function makeSurfaceTexture(base: string, seed: number, facade = false) {
     state = (state * 1664525 + 1013904223) >>> 0;
     return state / 4294967296;
   };
-  for (let i = 0; i < 18000; i++) {
+  for (let i = 0; i < (isTouch ? 1200 : 6000); i++) {
     const shade = Math.floor(random() * 48);
     ctx.fillStyle = random() > .5 ? `rgba(255,255,255,${shade / 1200})` : `rgba(0,0,0,${shade / 1100})`;
     const size = facade ? 1.5 : 2.5;
@@ -129,7 +131,7 @@ for(let ix=-3;ix<3;ix++) for(let iz=-3;iz<3;iz++) {
   addBox(cx,-.01,cz,20,.18,20,sidewalkMat,false,true);
   for(let q=0;q<4;q++) {
     const bx=cx+(q%2===0?-5:5), bz=cz+(q<2?-5:5);
-    const height=10+seeded((ix+5)*41+(iz+5)*7+q)*38;
+    const height=10+seeded((ix+5)*41+(iz+5)*7+q)*(isTouch ? 24 : 38);
     const width=5.8+seeded(q+ix*11+iz*3)*2.2;
     const depth=5.8+seeded(q+ix*5+iz*13)*2.2;
     const material=buildingMats[Math.floor(seeded(ix*71+iz*19+q)*buildingMats.length)];
@@ -137,7 +139,7 @@ for(let ix=-3;ix<3;ix++) for(let iz=-3;iz<3;iz++) {
     building.position.y=height/2;
     obstacles.push({minX:bx-width/2-.42,maxX:bx+width/2+.42,minZ:bz-depth/2-.42,maxZ:bz+depth/2+.42});
     const floors=Math.max(2,Math.floor(height/3.1));
-    const cols=Math.max(2,Math.floor(width/1.35));
+    const cols=Math.max(2,Math.floor(width/(isTouch ? 2.1 : 1.35)));
     for(let f=0;f<floors;f++) for(let c=0;c<cols;c++) {
       const wx=bx-width/2+.7+c*(width-.9)/cols;
       const wy=1.3+f*2.8;
@@ -162,7 +164,7 @@ for(let i=-5;i<=5;i++) {
 }
 const trunkMat=new THREE.MeshStandardMaterial({color:0x554537});
 const leafMat=new THREE.MeshStandardMaterial({color:0x425d50,roughness:1});
-for(let i=0;i<34;i++) {
+for(let i=0;i<(isTouch ? 14 : 34);i++) {
   const x=(seeded(i+20)-.5)*185, z=(seeded(i+80)-.5)*185;
   if(Math.abs(x%30)<8 || Math.abs(z%30)<8) continue;
   const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.18,.26,2.5,7),trunkMat);
@@ -212,7 +214,7 @@ function toggleCamera() {
   document.querySelector('#crosshair')?.classList.toggle('hidden',!state.firstPerson);
   showToast(state.firstPerson?'First Person':'Third Person');
 }
-document.querySelector('#play')?.addEventListener('click',startGame);
+
 document.querySelector('#how-to-play')?.addEventListener('click',()=>controlsPanel?.classList.remove('hidden'));
 document.querySelector('#close-controls')?.addEventListener('click',()=>controlsPanel?.classList.add('hidden'));
 window.addEventListener('keydown',e=>{
@@ -341,7 +343,7 @@ animate();
 window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth,window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,isTouch?1.25:2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,isTouch?1:2));
 });
 
 if(!supabaseConfigured) console.info('AFTERSTATE: Supabase credentials are not configured yet. The local prototype still works.');
