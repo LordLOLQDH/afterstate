@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { supabaseConfigured } from './supabase';
 
-const VERSION = '0.2.2';
+const VERSION = '0.3.0';
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
 const menu = document.querySelector<HTMLElement>('#menu')!;
 const hud = document.querySelector<HTMLElement>('#hud')!;
@@ -191,11 +191,22 @@ const footL=new THREE.Mesh(new THREE.BoxGeometry(.22,.12,.38),shoes), footR=foot
 footL.position.set(-.17,.12,-.06); footR.position.set(.17,.12,-.06); player.add(footL,footR);
 player.position.set(0,0,0); scene.add(player);
 
-const state={playing:false,firstPerson:false,yaw:0,pitch:-.12,vertical:0,onGround:true,walkTime:0,moveX:0,moveZ:0,lookX:0,lookY:0,gamepadCameraPressed:false};
+const state={playing:false,firstPerson:false,yaw:0,pitch:-.12,vertical:0,onGround:true,walkTime:0,moveX:0,moveZ:0,lookX:0,lookY:0,gamepadCameraPressed:false,inVehicle:false};
 const keys=new Set<string>();
 const clock=new THREE.Clock();
 const moveForward=new THREE.Vector3(), moveRight=new THREE.Vector3(), desired=new THREE.Vector3();
 const cameraTarget=new THREE.Vector3();
+const vehicle=new THREE.Group();
+const vehicleBody=new THREE.Mesh(new THREE.BoxGeometry(2,.68,4.1),new THREE.MeshStandardMaterial({color:0x344b60,metalness:.55,roughness:.32}));
+vehicleBody.position.y=.72; vehicle.add(vehicleBody);
+const vehicleCabin=new THREE.Mesh(new THREE.BoxGeometry(1.68,.72,1.95),new THREE.MeshStandardMaterial({color:0x182a37,metalness:.35,roughness:.22}));
+vehicleCabin.position.set(0,1.36,-.12); vehicle.add(vehicleCabin);
+const wheelMat=new THREE.MeshStandardMaterial({color:0x111417,roughness:.95});
+for(const wx of [-.98,.98]) for(const wz of [-1.32,1.32]) {
+ const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.36,.36,.2,16),wheelMat);
+ wheel.rotation.z=Math.PI/2; wheel.position.set(wx,.4,wz); vehicle.add(wheel);
+}
+vehicle.position.set(3.8,0,0); scene.add(vehicle);
 let lastToast=0;
 
 function showToast(message:string) {
@@ -209,6 +220,19 @@ function startGame() {
   else canvas.requestPointerLock?.();
   showToast('Willkommen in Metro City.');
 }
+function interact() {
+  if(!state.playing)return;
+  if(state.inVehicle){
+    state.inVehicle=false; player.visible=true;
+    player.position.set(vehicle.position.x+2.3,0,vehicle.position.z);
+    showToast('Ausgestiegen'); return;
+  }
+  if(player.position.distanceTo(vehicle.position)<5){
+    state.inVehicle=true; player.visible=false;
+    showToast('Eingestiegen · E zum Aussteigen');
+  } else showToast('Kein Fahrzeug in Reichweite');
+}
+document.querySelector<HTMLButtonElement>('#interact')?.addEventListener('pointerdown',e=>{e.preventDefault();interact();});
 function toggleCamera() {
   state.firstPerson=!state.firstPerson;
   document.querySelector('#crosshair')?.classList.toggle('hidden',!state.firstPerson);
@@ -220,6 +244,7 @@ document.querySelector('#close-controls')?.addEventListener('click',()=>controls
 window.addEventListener('keydown',e=>{
   keys.add(e.code);
   if(e.code==='KeyV'&&state.playing) toggleCamera();
+  if(e.code==='KeyE'&&state.playing&&!e.repeat) interact();
   if(e.code==='Escape'&&document.pointerLockElement===canvas) document.exitPointerLock();
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));
@@ -279,6 +304,14 @@ function updatePlayer(dt:number) {
   if(keys.has('KeyA')||keys.has('ArrowLeft'))x-=1;
   if(keys.has('KeyD')||keys.has('ArrowRight'))x+=1;
   const moving=Math.hypot(x,z)>.08;
+  if(state.inVehicle){
+    const throttle=-z, speed=throttle*(keys.has('ShiftLeft')?18:11);
+    vehicle.rotation.y-=x*dt*(Math.abs(speed)>.2?1.35:.65);
+    const forward=new THREE.Vector3(Math.sin(vehicle.rotation.y),0,Math.cos(vehicle.rotation.y));
+    const next=vehicle.position.clone().addScaledVector(forward,speed*dt);
+    if(!blocked(next.x,next.z))vehicle.position.copy(next);
+    state.walkTime+=dt*8; return;
+  }
   if(moving) {
     const len=Math.hypot(x,z);x/=len;z/=len;
     moveForward.set(-Math.sin(state.yaw),0,-Math.cos(state.yaw));
@@ -296,15 +329,19 @@ function updatePlayer(dt:number) {
   state.vertical-=19*dt;
   player.position.y+=state.vertical*dt;
   if(player.position.y<=0){player.position.y=0;state.vertical=0;state.onGround=true;}
-  const swing=moving?Math.sin(state.walkTime)*.48:0;
-  legL.rotation.x=swing;legR.rotation.x=-swing;armL.rotation.x=-swing*.75;armR.rotation.x=swing*.75;
-  torso.position.y=1.28+(moving?Math.abs(Math.sin(state.walkTime*2))*.035:0);
+  const swing=moving?Math.sin(state.walkTime)*.27:0;
+  legL.rotation.x=swing; legR.rotation.x=-swing;
+  armL.rotation.x=-swing*.42; armR.rotation.x=swing*.42;
+  torso.position.y=1.28+(moving?Math.abs(Math.sin(state.walkTime*2))*.012:0);
+  torso.rotation.z=moving?Math.sin(state.walkTime)*.018:0;
 }
 
 function updateCamera(dt:number) {
-  const forward=new THREE.Vector3(-Math.sin(state.yaw),0,-Math.cos(state.yaw));
+  const target=state.inVehicle?vehicle.position:player.position;
+  const yaw=state.inVehicle?vehicle.rotation.y:state.yaw;
+  const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
   if(state.firstPerson) {
-    cameraTarget.set(player.position.x,player.position.y+1.75,player.position.z);
+    cameraTarget.set(target.x,target.y+(state.inVehicle?1.35:1.75),target.z);
     camera.position.lerp(cameraTarget.clone().add(new THREE.Vector3(0,.04,0)),1-Math.exp(-18*dt));
     const look=new THREE.Vector3(
       camera.position.x+forward.x*Math.cos(state.pitch),
@@ -313,12 +350,12 @@ function updateCamera(dt:number) {
     );
     camera.lookAt(look);
   } else {
-    cameraTarget.set(player.position.x,player.position.y+1.35,player.position.z);
-    const distance=6.8;
+    cameraTarget.set(target.x,target.y+(state.inVehicle?1.1:1.35),target.z);
+    const distance=state.inVehicle?8:6.8;
     const desiredCamera=new THREE.Vector3(
-      player.position.x+Math.sin(state.yaw)*distance,
-      player.position.y+3.0+state.pitch*3,
-      player.position.z+Math.cos(state.yaw)*distance
+      target.x+Math.sin(yaw)*distance,
+      target.y+(state.inVehicle?4:3)+state.pitch*3,
+      target.z+Math.cos(yaw)*distance
     );
     camera.position.lerp(desiredCamera,1-Math.exp(-7*dt));
     camera.lookAt(cameraTarget);
