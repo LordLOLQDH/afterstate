@@ -15,23 +15,25 @@ scene.background = new THREE.Color(0xaebdca);
 scene.fog = new THREE.Fog(0xaebdca, 105, 340);
 
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 700);
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', precision: 'highp' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 2 : 2.5));
+// Mobile Safari has a much tighter GPU budget than desktop browsers.
+// Keep the mobile renderer lightweight so the game can initialize reliably.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'default' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 1.25 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !isTouch;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.setClearColor(0xaebdca);
-renderer.info.autoReset = true;
+
 
 const hemi = new THREE.HemisphereLight(0xc7d9ea, 0x424b50, 2.1);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffe2bf, 3.1);
 sun.position.set(-65, 100, 45);
-sun.castShadow = true;
-sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
+sun.castShadow = !isTouch;
+sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.00012;
 sun.shadow.normalBias = 0.025;
 sun.shadow.camera.left = -100;
@@ -99,7 +101,7 @@ const obstacles: Array<{minX:number;maxX:number;minZ:number;maxZ:number}> = [];
 function addBox(x:number,y:number,z:number,w:number,h:number,d:number,material:THREE.Material, cast=true, receive=true) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), material);
   mesh.position.set(x,y+h/2,z);
-  mesh.castShadow = cast;
+  mesh.castShadow = cast && !isTouch;
   mesh.receiveShadow = receive;
   scene.add(mesh);
   return mesh;
@@ -339,7 +341,7 @@ animate();
 window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth,window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,isTouch?2:2.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,isTouch?1.25:2));
 });
 
 if(!supabaseConfigured) console.info('AFTERSTATE: Supabase credentials are not configured yet. The local prototype still works.');
