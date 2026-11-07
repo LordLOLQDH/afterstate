@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import './style.css';
 import { supabaseConfigured } from './supabase';
 
 const VERSION = '0.1.0';
