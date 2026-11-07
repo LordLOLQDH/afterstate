@@ -57,14 +57,14 @@ function addBox(x:number,y:number,z:number,w:number,h:number,d:number,material:T
 function addRoad(x:number,z:number,w:number,d:number) {
   addBox(x,-.08,z,w,.12,d,roadMat,false,true);
   if (w > d) {
-    for(let p=-w/2+4;p<w/2-2;p+=9) addBox(x+p,-.012,z,.12,.012,.22,lineMat,false,false);
+    for(let p=-w/2+4;p<w/2-2;p+=9) addBox(x+p,.04,z,.12,.012,.22,lineMat,false,false);
   } else {
-    for(let p=-d/2+4;p<d/2-2;p+=9) addBox(x,-.012,z+p,.22,.012,.12,lineMat,false,false);
+    for(let p=-d/2+4;p<d/2-2;p+=9) addBox(x,.04,z+p,.22,.012,.12,lineMat,false,false);
   }
 }
 function seeded(n:number) { const v=Math.sin(n*127.1+311.7)*43758.5453; return v-Math.floor(v); }
 
-addBox(0,-.45,0,420,.8,420,groundMat,false,true);
+addBox(0,-.1,0,420,.1,420,groundMat,false,true);
 
 // A compact first district. The four larger cities will be built as separate world regions later.
 const blockCenters:number[]=[];
